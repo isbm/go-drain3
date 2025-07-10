@@ -6,15 +6,19 @@ import (
 	"fmt"
 )
 
-type PGXPersistence struct {
+// DumbPGXPersistence implements the PersistenceHandler interface
+// for saving and loading state to/from a PostgreSQL database.
+// It uses a single row with a fixed ID (1) to store the state.
+// That's why it's called "Dumb" - it doesn't handle multiple rows or complex queries.
+type DumbPGXPersistence struct {
 	db        *sql.DB
 	tableName string
 }
 
-// NewPGXPersistence creates a new PostgreSQL persistance
+// NewDumbPGXPersistence creates a new PostgreSQL persistance
 // instance with the provided database connection and table name.
-func NewPGXPersistence(db *sql.DB, table string) (*PGXPersistence, error) {
-	p := &PGXPersistence{db: db, tableName: fmt.Sprintf("%s_miner", table)}
+func NewDumbPGXPersistence(db *sql.DB, table string) (*DumbPGXPersistence, error) {
+	p := &DumbPGXPersistence{db: db, tableName: fmt.Sprintf("%s_miner", table)}
 	createStmt := fmt.Sprintf(`
 CREATE TABLE IF NOT EXISTS %s (
 	id    INTEGER PRIMARY KEY CHECK (id = 1),
@@ -30,7 +34,7 @@ CREATE TABLE IF NOT EXISTS %s (
 }
 
 // Save saves the current state to the PostgreSQL database.
-func (p *PGXPersistence) Save(ctx context.Context, state []byte) error {
+func (p *DumbPGXPersistence) Save(ctx context.Context, state []byte) error {
 	_, err := p.db.ExecContext(
 		ctx,
 		fmt.Sprintf(`
@@ -44,7 +48,7 @@ func (p *PGXPersistence) Save(ctx context.Context, state []byte) error {
 }
 
 // Load retrieves the saved state from the PostgreSQL database.
-func (p *PGXPersistence) Load(ctx context.Context) ([]byte, error) {
+func (p *DumbPGXPersistence) Load(ctx context.Context) ([]byte, error) {
 	var state []byte
 	err := p.db.QueryRowContext(
 		ctx,

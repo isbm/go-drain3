@@ -158,7 +158,7 @@ func (m *TemplateMiner) LoadState(ctx context.Context) error {
 	state, err := m.persistence.Load(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to load with persistence: %w", err)
-	} else if state == nil || len(state) == 0 {
+	} else if len(state) == 0 {
 		return fmt.Errorf("saved state not found")
 	}
 

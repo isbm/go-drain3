@@ -55,7 +55,7 @@ func (m *TemplateMiner) GetParameterList(logTemplate, logMessage string) []strin
 	// return: an ordered list of parameter values present in the log message
 
 	extractedParameters := m.ExtractParameters(logTemplate, logMessage)
-	if extractedParameters == nil || len(extractedParameters) == 0 {
+	if len(extractedParameters) == 0 {
 		return []string{}
 	}
 

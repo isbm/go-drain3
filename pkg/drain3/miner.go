@@ -15,6 +15,10 @@ type TemplateMiner struct {
 	lastSaveTime time.Time
 }
 
+func (m *TemplateMiner) GetDrain() *Drain {
+	return m.drain
+}
+
 func NewTemplateMiner(drain *Drain, persistence PersistenceHandler) *TemplateMiner {
 	return &TemplateMiner{
 		drain:        drain,

@@ -4,11 +4,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	lru "github.com/hashicorp/golang-lru/v2"
-	"github.com/jaeyo/go-drain3/util"
 	"strconv"
 	"strings"
 	"unicode"
+
+	lru "github.com/hashicorp/golang-lru/v2"
+	"github.com/isbm/go-drain3/util"
 )
 
 type ClusterUpdateType int

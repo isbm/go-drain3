@@ -13,6 +13,8 @@ type TemplateMiner struct {
 	drain        *Drain
 	persistence  PersistenceHandler
 	lastSaveTime time.Time
+	saveInterval int
+	batchCount   int
 }
 
 func (m *TemplateMiner) GetDrain() *Drain {
@@ -24,7 +26,19 @@ func NewTemplateMiner(drain *Drain, persistence PersistenceHandler) *TemplateMin
 		drain:        drain,
 		persistence:  persistence,
 		lastSaveTime: time.Now(),
+		batchCount:   0,
+		saveInterval: 0,
 	}
+}
+
+// SetContinuousSave enables or disables continuous saving of the state after each log message is added.
+// If set to zero, the state is continuously saved, otherwise every N records.
+func (m *TemplateMiner) SetSaveInterval(interval int) {
+	m.saveInterval = interval
+}
+
+func (m *TemplateMiner) GetSaveInterval() int {
+	return m.saveInterval
 }
 
 func (m *TemplateMiner) AddLogMessage(ctx context.Context, content string) (ClusterUpdateType, *LogCluster, string, int, error) {
@@ -37,12 +51,33 @@ func (m *TemplateMiner) AddLogMessage(ctx context.Context, content string) (Clus
 	clusterCount := len(m.drain.IdToCluster.Keys())
 
 	if updateType != ClusterUpdateTypeNone {
-		if err := m.SaveState(ctx); err != nil {
-			return ClusterUpdateTypeNone, nil, "", 0, fmt.Errorf("failed to save state: %w", err)
+		if m.saveInterval == 0 {
+			if err := m.SaveState(ctx); err != nil {
+				return ClusterUpdateTypeNone, nil, "", 0, fmt.Errorf("failed to save state: %w", err)
+			}
+		} else {
+			m.batchCount++
+			if m.batchCount >= m.saveInterval {
+				if err := m.SaveState(ctx); err != nil {
+					return ClusterUpdateTypeNone, nil, "", 0, fmt.Errorf("failed to save state: %w", err)
+				}
+				m.batchCount = 0
+			}
 		}
 	}
 
 	return updateType, logCluster, templateMined, clusterCount, nil
+}
+
+// Flush saves the current state if the save interval is set and there are pending changes.
+func (m *TemplateMiner) Flush(ctx context.Context) error {
+	if m.saveInterval > 0 && m.batchCount > 0 {
+		if err := m.SaveState(ctx); err != nil {
+			return fmt.Errorf("failed to flush state: %w", err)
+		}
+		m.batchCount = 0
+	}
+	return nil
 }
 
 func (m *TemplateMiner) Match(content string, strategy SearchStrategy) (*LogCluster, error) {

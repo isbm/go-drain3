@@ -45,8 +45,8 @@ func (p *DumbPGXPersistence) Flush() (string, error) {
 }
 
 // Teardown cleans up the storage, e.g., drops the table in Db
-func (p *DumbPGXPersistence) Teardown(ctx context.Context) error {
-	_, err := p.db.ExecContext(ctx, fmt.Sprintf(`DROP TABLE IF EXISTS %s`, p.tableName))
+func (p *DumbPGXPersistence) Teardown() error {
+	_, err := p.db.Exec(fmt.Sprintf(`DROP TABLE IF EXISTS %s`, p.tableName))
 	if err != nil {
 		return fmt.Errorf("failed to drop persistence table: %w", err)
 	}
@@ -114,8 +114,8 @@ func (p *PGXClusterPersistence) Flush() (string, error) {
 }
 
 // Teardown cleans up the storage, e.g., drops the table in Db
-func (p *PGXClusterPersistence) Teardown(ctx context.Context) error {
-	_, err := p.db.ExecContext(ctx, fmt.Sprintf(`DROP TABLE IF EXISTS %s`, p.tableName))
+func (p *PGXClusterPersistence) Teardown() error {
+	_, err := p.db.Exec(fmt.Sprintf(`DROP TABLE IF EXISTS %s`, p.tableName))
 	return err
 }
 

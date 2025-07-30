@@ -24,7 +24,7 @@ func (p *MemoryPersistence) Flush() (string, error) {
 	return "Memory state flushed successfully", nil
 }
 
-func (p *MemoryPersistence) Teardown(_ context.Context) error {
+func (p *MemoryPersistence) Teardown() error {
 	p.State = nil
 	return nil
 }

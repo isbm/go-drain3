@@ -1,3 +1,4 @@
+// Package drain3 provides log template mining and parameter extraction functionality.
 package drain3
 
 import (
@@ -31,7 +32,7 @@ func NewTemplateMiner(drain *Drain, persistence PersistenceHandler) *TemplateMin
 	}
 }
 
-// SetContinuousSave enables or disables continuous saving of the state after each log message is added.
+// SetSaveInterval enables or disables continuous saving of the state after each log message is added.
 // If set to zero, the state is continuously saved, otherwise every N records.
 func (m *TemplateMiner) SetSaveInterval(interval int) {
 	m.saveInterval = interval

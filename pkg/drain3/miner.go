@@ -48,7 +48,7 @@ func (m *TemplateMiner) AddLogMessage(ctx context.Context, content string) (Clus
 	}
 
 	templateMined := logCluster.GetTemplate()
-	clusterCount := len(m.drain.IdToCluster.Keys())
+	clusterCount := len(m.drain.IDToCluster.Keys())
 
 	if updateType != ClusterUpdateTypeNone {
 		if m.saveInterval == 0 {

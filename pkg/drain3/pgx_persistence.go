@@ -104,13 +104,13 @@ func (p *PGXClusterPersistence) Save(ctx context.Context, state []byte) error {
 		size     int64
 	})
 	for rows.Next() {
-		var clusterId int64
+		var clusterID int64
 		var template string
 		var size int64
-		if err := rows.Scan(&clusterId, &template, &size); err != nil {
+		if err := rows.Scan(&clusterID, &template, &size); err != nil {
 			return err
 		}
-		dbClusters[clusterId] = struct {
+		dbClusters[clusterID] = struct {
 			template string
 			size     int64
 		}{template, size}
@@ -144,17 +144,17 @@ func (p *PGXClusterPersistence) Save(ctx context.Context, state []byte) error {
 
 	// 2. Sync new/changed clusters
 	for _, cluster := range drain.Clusters {
-		inMemIDs[cluster.ClusterId] = true
-		dbCluster, exists := dbClusters[cluster.ClusterId]
+		inMemIDs[cluster.ClusterID] = true
+		dbCluster, exists := dbClusters[cluster.ClusterID]
 		templateStr := strings.Join(cluster.LogTemplateTokens, " ")
 		if !exists {
-			_, err := insertStmt.ExecContext(ctx, cluster.ClusterId, templateStr, cluster.Size)
+			_, err := insertStmt.ExecContext(ctx, cluster.ClusterID, templateStr, cluster.Size)
 			if err != nil {
 				return err
 			}
 		} else if dbCluster.template != templateStr || dbCluster.size != cluster.Size {
 			// Changed cluster
-			_, err := updateStmt.ExecContext(ctx, cluster.ClusterId, templateStr, cluster.Size)
+			_, err := updateStmt.ExecContext(ctx, cluster.ClusterID, templateStr, cluster.Size)
 			if err != nil {
 				return err
 			}
@@ -162,9 +162,9 @@ func (p *PGXClusterPersistence) Save(ctx context.Context, state []byte) error {
 	}
 
 	// 3. Delete missing clusters
-	for clusterId := range dbClusters {
-		if !inMemIDs[clusterId] {
-			_, err := tx.ExecContext(ctx, fmt.Sprintf(`DELETE FROM %s WHERE cluster_id = $1`, p.tableName), clusterId)
+	for clusterID := range dbClusters {
+		if !inMemIDs[clusterID] {
+			_, err := tx.ExecContext(ctx, fmt.Sprintf(`DELETE FROM %s WHERE cluster_id = $1`, p.tableName), clusterID)
 			if err != nil {
 				return err
 			}
@@ -183,14 +183,14 @@ func (p *PGXClusterPersistence) Load(ctx context.Context) ([]byte, error) {
 
 	var clusters []*LogCluster
 	for rows.Next() {
-		var clusterId int64
+		var clusterID int64
 		var template string
 		var size int64
-		if err := rows.Scan(&clusterId, &template, &size); err != nil {
+		if err := rows.Scan(&clusterID, &template, &size); err != nil {
 			return nil, err
 		}
 		cluster := &LogCluster{
-			ClusterId:         clusterId,
+			ClusterID:         clusterID,
 			LogTemplateTokens: strings.Split(template, " "),
 			Size:              size,
 		}

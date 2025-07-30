@@ -6,14 +6,14 @@ import (
 )
 
 type LogCluster struct {
-	ClusterId         int64
+	ClusterID         int64
 	LogTemplateTokens []string
 	Size              int64
 }
 
-func NewLogCluster(clusterId int64, logTemplateTokens []string) *LogCluster {
+func NewLogCluster(clusterID int64, logTemplateTokens []string) *LogCluster {
 	return &LogCluster{
-		ClusterId:         clusterId,
+		ClusterID:         clusterID,
 		LogTemplateTokens: logTemplateTokens,
 		Size:              1,
 	}
@@ -24,5 +24,5 @@ func (l *LogCluster) GetTemplate() string {
 }
 
 func (l *LogCluster) String() string {
-	return fmt.Sprintf("ID=%-5d : size=%-10d: %s", l.ClusterId, l.Size, l.GetTemplate())
+	return fmt.Sprintf("ID=%-5d : size=%-10d: %s", l.ClusterID, l.Size, l.GetTemplate())
 }

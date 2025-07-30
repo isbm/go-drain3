@@ -34,3 +34,21 @@ func (p *FilePersistence) Load(_ context.Context) ([]byte, error) {
 
 	return state, nil
 }
+
+func (p *FilePersistence) Flush() (string, error) {
+	file, err := os.OpenFile(p.filePath, os.O_TRUNC|os.O_WRONLY, 0644)
+	if err != nil {
+		return "", fmt.Errorf("failed to truncate file: %w", err)
+	}
+	defer file.Close()
+
+	return "File flushed successfully", nil
+}
+
+func (p *FilePersistence) Teardown(_ context.Context) error {
+	if err := os.Remove(p.filePath); err != nil {
+		return fmt.Errorf("failed to remove file during teardown: %w", err)
+	}
+
+	return nil
+}

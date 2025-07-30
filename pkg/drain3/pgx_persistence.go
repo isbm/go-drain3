@@ -35,6 +35,24 @@ CREATE TABLE IF NOT EXISTS %s (
 	return p, nil
 }
 
+// Flush the target table from the existing data (truncate)
+func (p *DumbPGXPersistence) Flush() (string, error) {
+	_, err := p.db.Exec(fmt.Sprintf("TRUNCATE TABLE %s", p.tableName))
+	if err != nil {
+		return fmt.Sprintf("Failed to truncate table %s: %v", p.tableName, err), err
+	}
+	return fmt.Sprintf("Table %s truncated successfully", p.tableName), nil
+}
+
+// Teardown cleans up the storage, e.g., drops the table in Db
+func (p *DumbPGXPersistence) Teardown(ctx context.Context) error {
+	_, err := p.db.ExecContext(ctx, fmt.Sprintf(`DROP TABLE IF EXISTS %s`, p.tableName))
+	if err != nil {
+		return fmt.Errorf("failed to drop persistence table: %w", err)
+	}
+	return nil
+}
+
 // Save saves the current state to the PostgreSQL database.
 func (p *DumbPGXPersistence) Save(ctx context.Context, state []byte) error {
 	_, err := p.db.ExecContext(
@@ -84,6 +102,21 @@ CREATE TABLE IF NOT EXISTS %s (
 	}
 
 	return &PGXClusterPersistence{db: db, tableName: tbl}, nil
+}
+
+// Flush clears the target table from the existing data (truncate)
+func (p *PGXClusterPersistence) Flush() (string, error) {
+	_, err := p.db.Exec(fmt.Sprintf("TRUNCATE TABLE %s", p.tableName))
+	if err != nil {
+		return fmt.Sprintf("Failed to truncate table %s: %v", p.tableName, err), err
+	}
+	return fmt.Sprintf("Table %s truncated successfully", p.tableName), nil
+}
+
+// Teardown cleans up the storage, e.g., drops the table in Db
+func (p *PGXClusterPersistence) Teardown(ctx context.Context) error {
+	_, err := p.db.ExecContext(ctx, fmt.Sprintf(`DROP TABLE IF EXISTS %s`, p.tableName))
+	return err
 }
 
 func (p *PGXClusterPersistence) Save(ctx context.Context, state []byte) error {

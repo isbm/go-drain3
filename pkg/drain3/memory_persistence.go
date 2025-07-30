@@ -18,3 +18,13 @@ func (p *MemoryPersistence) Save(_ context.Context, state []byte) error {
 func (p *MemoryPersistence) Load(_ context.Context) ([]byte, error) {
 	return p.State, nil
 }
+
+func (p *MemoryPersistence) Flush() (string, error) {
+	p.State = nil
+	return "Memory state flushed successfully", nil
+}
+
+func (p *MemoryPersistence) Teardown(_ context.Context) error {
+	p.State = nil
+	return nil
+}

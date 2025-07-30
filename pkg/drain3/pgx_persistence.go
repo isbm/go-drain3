@@ -45,12 +45,12 @@ func (p *DumbPGXPersistence) Flush() (string, error) {
 }
 
 // Teardown cleans up the storage, e.g., drops the table in Db
-func (p *DumbPGXPersistence) Teardown() error {
+func (p *DumbPGXPersistence) Teardown() (string, error) {
 	_, err := p.db.Exec(fmt.Sprintf(`DROP TABLE IF EXISTS %s`, p.tableName))
 	if err != nil {
-		return fmt.Errorf("failed to drop persistence table: %w", err)
+		return "", fmt.Errorf("failed to drop persistence table %s: %w", p.tableName, err)
 	}
-	return nil
+	return fmt.Sprintf("Teardown of table %s complete", p.tableName), nil
 }
 
 // Save saves the current state to the PostgreSQL database.
@@ -114,9 +114,12 @@ func (p *PGXClusterPersistence) Flush() (string, error) {
 }
 
 // Teardown cleans up the storage, e.g., drops the table in Db
-func (p *PGXClusterPersistence) Teardown() error {
+func (p *PGXClusterPersistence) Teardown() (string, error) {
 	_, err := p.db.Exec(fmt.Sprintf(`DROP TABLE IF EXISTS %s`, p.tableName))
-	return err
+	if err != nil {
+		return "", fmt.Errorf("failed to drop clusters table %s: %w", p.tableName, err)
+	}
+	return fmt.Sprintf("Teardown of table %s complete", p.tableName), nil
 }
 
 func (p *PGXClusterPersistence) Save(ctx context.Context, state []byte) error {

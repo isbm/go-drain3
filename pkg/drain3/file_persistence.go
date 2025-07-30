@@ -45,10 +45,10 @@ func (p *FilePersistence) Flush() (string, error) {
 	return "File flushed successfully", nil
 }
 
-func (p *FilePersistence) Teardown() error {
+func (p *FilePersistence) Teardown() (string, error) {
 	if err := os.Remove(p.filePath); err != nil {
-		return fmt.Errorf("failed to remove file during teardown: %w", err)
+		return "", fmt.Errorf("failed to remove file during teardown: %w", err)
 	}
 
-	return nil
+	return "Teardown complete", nil
 }

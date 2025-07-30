@@ -82,11 +82,12 @@ func (m *TemplateMiner) Flush(ctx context.Context) error {
 }
 
 // Teardown cleans up resources used by the miner.
-func (m *TemplateMiner) Teardown() error {
-	if err := m.persistence.Teardown(); err != nil {
-		return fmt.Errorf("failed to teardown persistence: %w", err)
+func (m *TemplateMiner) Teardown() (string, error) {
+	info, err := m.persistence.Teardown()
+	if err != nil {
+		return "", fmt.Errorf("failed to teardown persistence: %w", err)
 	}
-	return nil
+	return info, nil
 }
 
 // FlushStorage flushes the storage, whatever backend is underneath

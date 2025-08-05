@@ -14,7 +14,7 @@ type TemplateMiner struct {
 	drain        *Drain
 	persistence  PersistenceHandler
 	lastSaveTime time.Time
-	saveInterval int
+	batchSize    int
 	batchCount   int
 }
 
@@ -28,18 +28,18 @@ func NewTemplateMiner(drain *Drain, persistence PersistenceHandler) *TemplateMin
 		persistence:  persistence,
 		lastSaveTime: time.Now(),
 		batchCount:   0,
-		saveInterval: 0,
+		batchSize:    0,
 	}
 }
 
-// SetSaveInterval enables or disables continuous saving of the state after each log message is added.
+// SetBatchSize enables or disables continuous saving of the state after each log message is added.
 // If set to zero, the state is continuously saved, otherwise every N records.
-func (m *TemplateMiner) SetSaveInterval(interval int) {
-	m.saveInterval = interval
+func (m *TemplateMiner) SetBatchSize(interval int) {
+	m.batchSize = interval
 }
 
 func (m *TemplateMiner) GetSaveInterval() int {
-	return m.saveInterval
+	return m.batchSize
 }
 
 func (m *TemplateMiner) AddLogMessage(ctx context.Context, content string) (ClusterUpdateType, *LogCluster, string, int, error) {
@@ -52,13 +52,13 @@ func (m *TemplateMiner) AddLogMessage(ctx context.Context, content string) (Clus
 	clusterCount := len(m.drain.IDToCluster.Keys())
 
 	if updateType != ClusterUpdateTypeNone {
-		if m.saveInterval == 0 {
+		if m.batchSize == 0 {
 			if err := m.SaveState(ctx); err != nil {
 				return ClusterUpdateTypeNone, nil, "", 0, fmt.Errorf("failed to save state: %w", err)
 			}
 		} else {
 			m.batchCount++
-			if m.batchCount >= m.saveInterval {
+			if m.batchCount >= m.batchSize {
 				if err := m.SaveState(ctx); err != nil {
 					return ClusterUpdateTypeNone, nil, "", 0, fmt.Errorf("failed to save state: %w", err)
 				}
@@ -72,7 +72,7 @@ func (m *TemplateMiner) AddLogMessage(ctx context.Context, content string) (Clus
 
 // Flush saves the current state if the save interval is set and there are pending changes.
 func (m *TemplateMiner) Flush(ctx context.Context) error {
-	if m.saveInterval > 0 && m.batchCount > 0 {
+	if m.batchSize > 0 && m.batchCount > 0 {
 		if err := m.SaveState(ctx); err != nil {
 			return fmt.Errorf("failed to flush state: %w", err)
 		}
@@ -97,6 +97,16 @@ func (m *TemplateMiner) FlushStorage() (string, error) {
 
 func (m *TemplateMiner) Match(content string, strategy SearchStrategy) (*LogCluster, error) {
 	return m.drain.Match(content, strategy)
+}
+
+// Info returns information about the current state of the miner
+func (m *TemplateMiner) Info() (PersistenceInformation, error) {
+	// returns information about the current state of the miner
+	info, err := m.persistence.Info()
+	if err != nil {
+		return PersistenceInformation{}, fmt.Errorf("failed to get persistence info: %w", err)
+	}
+	return info, nil
 }
 
 func (m *TemplateMiner) GetParameterList(logTemplate, logMessage string) []string {

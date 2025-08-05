@@ -4,10 +4,12 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"time"
 )
 
 type FilePersistence struct {
-	filePath string
+	filePath  string
+	timeStamp time.Time
 }
 
 func NewFilePersistence(filePath string) *FilePersistence {
@@ -18,6 +20,8 @@ func (p *FilePersistence) Save(_ context.Context, state []byte) error {
 	if err := os.WriteFile(p.filePath, state, 0644); err != nil {
 		return fmt.Errorf("failed to write file: %w", err)
 	}
+
+	p.timeStamp = time.Now()
 
 	return nil
 }
@@ -51,4 +55,16 @@ func (p *FilePersistence) Teardown() (string, error) {
 	}
 
 	return "Teardown complete", nil
+}
+
+func (p *FilePersistence) Info() (PersistenceInformation, error) {
+	info := PersistenceInformation{
+		StorageType: "file",
+		StorageName: p.filePath,
+		MaxClusters: 0, // Not applicable for file storage
+		RecordCount: 0, // Not applicable for file storage
+		LastUpdated: p.timeStamp.Format(time.RFC3339),
+	}
+
+	return info, nil
 }

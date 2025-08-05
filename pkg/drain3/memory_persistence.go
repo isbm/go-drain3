@@ -28,3 +28,13 @@ func (p *MemoryPersistence) Teardown() (string, error) {
 	p.State = nil
 	return "Teardown complete", nil
 }
+
+func (p *MemoryPersistence) Info() (PersistenceInformation, error) {
+	return PersistenceInformation{
+		StorageType: "memory",
+		StorageName: "in-memory storage",
+		MaxClusters: 0,
+		RecordCount: 0,
+		LastUpdated: "",
+	}, nil
+}

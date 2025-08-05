@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 )
 
 // DumbPGXPersistence implements the PersistenceHandler interface
@@ -15,6 +16,7 @@ import (
 type DumbPGXPersistence struct {
 	db        *sql.DB
 	tableName string
+	ts        time.Time
 }
 
 // NewDumbPGXPersistence creates a new PostgreSQL persistance
@@ -64,6 +66,7 @@ func (p *DumbPGXPersistence) Save(ctx context.Context, state []byte) error {
 		`, p.tableName),
 		state,
 	)
+	p.ts = time.Now()
 	return err
 }
 
@@ -78,6 +81,23 @@ func (p *DumbPGXPersistence) Load(ctx context.Context) ([]byte, error) {
 		return nil, nil
 	}
 	return state, err
+}
+
+func (p *DumbPGXPersistence) Info() (PersistenceInformation, error) {
+	var count int
+
+	err := p.db.QueryRow(fmt.Sprintf(`SELECT count(id) FROM %s`, p.tableName)).Scan(&count)
+	if err != nil {
+		return PersistenceInformation{}, fmt.Errorf("failed to get record count: %w", err)
+	}
+
+	return PersistenceInformation{
+		StorageType: "dumb-pgx",
+		StorageName: p.tableName,
+		MaxClusters: 0,     // N/A
+		RecordCount: count, // Same as cluster count in this case
+		LastUpdated: p.ts.Format(time.RFC3339),
+	}, nil
 }
 
 type PGXClusterPersistence struct {
@@ -237,4 +257,38 @@ func (p *PGXClusterPersistence) Load(ctx context.Context) ([]byte, error) {
 		Clusters: clusters,
 	}
 	return json.Marshal(drain)
+}
+
+func (p *PGXClusterPersistence) Info() (PersistenceInformation, error) {
+	var count sql.NullInt64
+	var lastUpdated sql.NullTime
+	var maxClusters sql.NullInt64
+
+	err := p.db.QueryRow(fmt.Sprintf(`SELECT count(updated) AS records, max(updated) AS last_updated, max(size) AS max_clusters FROM %s`, p.tableName)).Scan(&count, &lastUpdated, &maxClusters)
+	if err != nil {
+		return PersistenceInformation{}, fmt.Errorf("failed to get record count: %w", err)
+	}
+
+	lastUpdatedStr := ""
+	if lastUpdated.Valid {
+		lastUpdatedStr = lastUpdated.Time.Format(time.RFC3339)
+	}
+
+	maxClustersVal := 0
+	if maxClusters.Valid {
+		maxClustersVal = int(maxClusters.Int64)
+	}
+
+	countVal := 0
+	if count.Valid {
+		countVal = int(count.Int64)
+	}
+
+	return PersistenceInformation{
+		StorageType: "pgx",
+		StorageName: strings.TrimSuffix(p.tableName, "_clusters"),
+		MaxClusters: maxClustersVal,
+		RecordCount: countVal,
+		LastUpdated: lastUpdatedStr,
+	}, nil
 }

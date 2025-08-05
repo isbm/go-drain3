@@ -39,7 +39,7 @@ type Drain struct {
 	ParamStr                 string
 	ParametrizeNumericTokens bool
 
-	IdToCluster     *lru.Cache[int64, *LogCluster] `json:"-"`
+	IDToCluster     *lru.Cache[int64, *LogCluster] `json:"-"`
 	ClustersCounter int64
 }
 
@@ -103,7 +103,7 @@ func NewDrain(options ...optionFn) (*Drain, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create lru-cache: %w", err)
 	}
-	drain.IdToCluster = l
+	drain.IDToCluster = l
 
 	return drain, nil
 }
@@ -121,9 +121,9 @@ func (d *Drain) AddLogMessage(content string) (*LogCluster, ClusterUpdateType, e
 	if matchCluster == nil {
 		// match no existing log cluster
 		d.ClustersCounter++
-		clusterId := d.ClustersCounter
-		matchCluster = NewLogCluster(clusterId, contentTokens)
-		d.IdToCluster.Add(clusterId, matchCluster)
+		clusterID := d.ClustersCounter
+		matchCluster = NewLogCluster(clusterID, contentTokens)
+		d.IDToCluster.Add(clusterID, matchCluster)
 		d.addSeqToPrefixTree(d.RootNode, matchCluster)
 		updateType = ClusterUpdateTypeCreated
 	} else {
@@ -143,7 +143,7 @@ func (d *Drain) AddLogMessage(content string) (*LogCluster, ClusterUpdateType, e
 		matchCluster.Size++
 
 		// touch cluster to update its state in the cache
-		d.IdToCluster.Get(matchCluster.ClusterId)
+		d.IDToCluster.Get(matchCluster.ClusterID)
 	}
 
 	return matchCluster, updateType, nil
@@ -169,7 +169,7 @@ func (d *Drain) treeSearch(rootNode *Node, tokens []string, simTh float64, inclu
 
 	// handle case of empty log string - return the single cluster in that group
 	if tokenCount == 0 {
-		logCluster, exist := d.IdToCluster.Get(currentNode.ClusterIds[0])
+		logCluster, exist := d.IDToCluster.Get(currentNode.ClusterIds[0])
 		if !exist {
 			return nil, nil
 		}
@@ -218,9 +218,9 @@ func (d *Drain) fastMatch(clusterIds []int64, tokens []string, simTh float64, in
 	maxParamCount := int64(-1)
 	var maxCluster *LogCluster
 
-	for _, clusterId := range clusterIds {
+	for _, clusterID := range clusterIds {
 		// try to retrieve cluster from cache with bypassing eviction algorithm as we are only testing candidates for a match
-		cluster, exist := d.IdToCluster.Get(clusterId)
+		cluster, exist := d.IDToCluster.Get(clusterID)
 		if !exist {
 			continue
 		}
@@ -293,7 +293,7 @@ func (d *Drain) addSeqToPrefixTree(rootNode *Node, cluster *LogCluster) {
 
 	// handle case of empty log string
 	if tokenCount == 0 {
-		currentNode.ClusterIds = []int64{cluster.ClusterId}
+		currentNode.ClusterIds = []int64{cluster.ClusterID}
 		return
 	}
 
@@ -303,12 +303,12 @@ func (d *Drain) addSeqToPrefixTree(rootNode *Node, cluster *LogCluster) {
 		if currentDepth >= d.MaxNodeDepth || currentDepth >= int64(tokenCount) {
 			// clean up stale clusters before adding a new one.
 			newClusterIds := []int64{}
-			for _, clusterId := range currentNode.ClusterIds {
-				if _, exist := d.IdToCluster.Get(clusterId); exist {
-					newClusterIds = append(newClusterIds, clusterId)
+			for _, clusterID := range currentNode.ClusterIds {
+				if _, exist := d.IDToCluster.Get(clusterID); exist {
+					newClusterIds = append(newClusterIds, clusterID)
 				}
 			}
-			newClusterIds = append(newClusterIds, cluster.ClusterId)
+			newClusterIds = append(newClusterIds, cluster.ClusterID)
 			currentNode.ClusterIds = newClusterIds
 			break
 		}
@@ -444,7 +444,7 @@ func (d *Drain) getClustersIdsForSeqLen(seqLen int) []int64 {
 }
 
 func (d *Drain) GetClusters() []*LogCluster {
-	return d.IdToCluster.Values()
+	return d.IDToCluster.Values()
 }
 
 func (d *Drain) PrintTree(maxClusters int) {
@@ -453,11 +453,12 @@ func (d *Drain) PrintTree(maxClusters int) {
 
 func (d *Drain) printNode(token string, node *Node, depth int, maxClusters int) {
 	outStr := strings.Repeat("\t", depth)
-	if depth == 0 {
+	switch depth {
+	case 0:
 		outStr += fmt.Sprintf("<%s>", token)
-	} else if depth == 1 {
+	case 1:
 		outStr += fmt.Sprintf("<L=%s>", token)
-	} else {
+	default:
 		outStr += fmt.Sprintf("\"%s\"", token)
 	}
 
@@ -471,8 +472,8 @@ func (d *Drain) printNode(token string, node *Node, depth int, maxClusters int) 
 		d.printNode(token, child, depth+1, maxClusters)
 	}
 
-	for _, clusterId := range node.ClusterIds[:min(len(node.ClusterIds), maxClusters)] {
-		cluster, exist := d.IdToCluster.Get(clusterId)
+	for _, clusterID := range node.ClusterIds[:min(len(node.ClusterIds), maxClusters)] {
+		cluster, exist := d.IDToCluster.Get(clusterID)
 		if !exist {
 			continue
 		}
@@ -484,7 +485,7 @@ func (d *Drain) printNode(token string, node *Node, depth int, maxClusters int) 
 
 func (d *Drain) MarshalJSON() ([]byte, error) {
 	clusters := []*LogCluster{}
-	clusters = append(clusters, d.IdToCluster.Values()...)
+	clusters = append(clusters, d.IDToCluster.Values()...)
 
 	return json.Marshal(&SerializableDrain{
 		LogClusterDepth:          d.LogClusterDepth,
@@ -503,28 +504,28 @@ func (d *Drain) MarshalJSON() ([]byte, error) {
 }
 
 func (d *Drain) UnmarshalJSON(data []byte) error {
-	var forJson SerializableDrain
-	err := json.Unmarshal(data, &forJson)
+	var forJSON SerializableDrain
+	err := json.Unmarshal(data, &forJSON)
 	if err != nil {
 		return err
 	}
 
-	l, _ := lru.New[int64, *LogCluster](forJson.MaxClusters)
-	for _, cluster := range forJson.Clusters {
-		l.Add(cluster.ClusterId, cluster)
+	l, _ := lru.New[int64, *LogCluster](forJSON.MaxClusters)
+	for _, cluster := range forJSON.Clusters {
+		l.Add(cluster.ClusterID, cluster)
 	}
 
-	d.LogClusterDepth = forJson.LogClusterDepth
-	d.MaxNodeDepth = forJson.MaxNodeDepth
-	d.SimTh = forJson.SimTh
-	d.MaxChildren = forJson.MaxChildren
-	d.RootNode = forJson.RootNode
-	d.MaxClusters = forJson.MaxClusters
-	d.ExtraDelimiters = forJson.ExtraDelimiters
-	d.ParamStr = forJson.ParamStr
-	d.ParametrizeNumericTokens = forJson.ParametrizeNumericTokens
-	d.IdToCluster = l
-	d.ClustersCounter = forJson.ClustersCounter
+	d.LogClusterDepth = forJSON.LogClusterDepth
+	d.MaxNodeDepth = forJSON.MaxNodeDepth
+	d.SimTh = forJSON.SimTh
+	d.MaxChildren = forJSON.MaxChildren
+	d.RootNode = forJSON.RootNode
+	d.MaxClusters = forJSON.MaxClusters
+	d.ExtraDelimiters = forJSON.ExtraDelimiters
+	d.ParamStr = forJSON.ParamStr
+	d.ParametrizeNumericTokens = forJSON.ParametrizeNumericTokens
+	d.IDToCluster = l
+	d.ClustersCounter = forJSON.ClustersCounter
 
 	return nil
 }

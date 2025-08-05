@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 )
 
 // DumbPGXPersistence implements the PersistenceHandler interface
@@ -15,6 +16,7 @@ import (
 type DumbPGXPersistence struct {
 	db        *sql.DB
 	tableName string
+	ts        time.Time
 }
 
 // NewDumbPGXPersistence creates a new PostgreSQL persistance
@@ -35,6 +37,24 @@ CREATE TABLE IF NOT EXISTS %s (
 	return p, nil
 }
 
+// Flush the target table from the existing data (truncate)
+func (p *DumbPGXPersistence) Flush() (string, error) {
+	_, err := p.db.Exec(fmt.Sprintf("TRUNCATE TABLE %s", p.tableName))
+	if err != nil {
+		return fmt.Sprintf("Failed to truncate table %s: %v", p.tableName, err), err
+	}
+	return fmt.Sprintf("Table %s truncated successfully", p.tableName), nil
+}
+
+// Teardown cleans up the storage, e.g., drops the table in Db
+func (p *DumbPGXPersistence) Teardown() (string, error) {
+	_, err := p.db.Exec(fmt.Sprintf(`DROP TABLE IF EXISTS %s`, p.tableName))
+	if err != nil {
+		return "", fmt.Errorf("failed to drop persistence table %s: %w", p.tableName, err)
+	}
+	return fmt.Sprintf("Teardown of table %s complete", p.tableName), nil
+}
+
 // Save saves the current state to the PostgreSQL database.
 func (p *DumbPGXPersistence) Save(ctx context.Context, state []byte) error {
 	_, err := p.db.ExecContext(
@@ -46,6 +66,7 @@ func (p *DumbPGXPersistence) Save(ctx context.Context, state []byte) error {
 		`, p.tableName),
 		state,
 	)
+	p.ts = time.Now()
 	return err
 }
 
@@ -60,6 +81,23 @@ func (p *DumbPGXPersistence) Load(ctx context.Context) ([]byte, error) {
 		return nil, nil
 	}
 	return state, err
+}
+
+func (p *DumbPGXPersistence) Info() (PersistenceInformation, error) {
+	var count int
+
+	err := p.db.QueryRow(fmt.Sprintf(`SELECT count(id) FROM %s`, p.tableName)).Scan(&count)
+	if err != nil {
+		return PersistenceInformation{}, fmt.Errorf("failed to get record count: %w", err)
+	}
+
+	return PersistenceInformation{
+		StorageType: "dumb-pgx",
+		StorageName: p.tableName,
+		MaxClusters: 0,     // N/A
+		RecordCount: count, // Same as cluster count in this case
+		LastUpdated: p.ts.Format(time.RFC3339),
+	}, nil
 }
 
 type PGXClusterPersistence struct {
@@ -86,6 +124,24 @@ CREATE TABLE IF NOT EXISTS %s (
 	return &PGXClusterPersistence{db: db, tableName: tbl}, nil
 }
 
+// Flush clears the target table from the existing data (truncate)
+func (p *PGXClusterPersistence) Flush() (string, error) {
+	_, err := p.db.Exec(fmt.Sprintf("TRUNCATE TABLE %s", p.tableName))
+	if err != nil {
+		return fmt.Sprintf("Failed to truncate table %s: %v", p.tableName, err), err
+	}
+	return fmt.Sprintf("Table %s truncated successfully", p.tableName), nil
+}
+
+// Teardown cleans up the storage, e.g., drops the table in Db
+func (p *PGXClusterPersistence) Teardown() (string, error) {
+	_, err := p.db.Exec(fmt.Sprintf(`DROP TABLE IF EXISTS %s`, p.tableName))
+	if err != nil {
+		return "", fmt.Errorf("failed to drop clusters table %s: %w", p.tableName, err)
+	}
+	return fmt.Sprintf("Teardown of table %s complete", p.tableName), nil
+}
+
 func (p *PGXClusterPersistence) Save(ctx context.Context, state []byte) error {
 	var drain SerializableDrain
 	if err := json.Unmarshal(state, &drain); err != nil {
@@ -104,13 +160,13 @@ func (p *PGXClusterPersistence) Save(ctx context.Context, state []byte) error {
 		size     int64
 	})
 	for rows.Next() {
-		var clusterId int64
+		var clusterID int64
 		var template string
 		var size int64
-		if err := rows.Scan(&clusterId, &template, &size); err != nil {
+		if err := rows.Scan(&clusterID, &template, &size); err != nil {
 			return err
 		}
-		dbClusters[clusterId] = struct {
+		dbClusters[clusterID] = struct {
 			template string
 			size     int64
 		}{template, size}
@@ -144,17 +200,17 @@ func (p *PGXClusterPersistence) Save(ctx context.Context, state []byte) error {
 
 	// 2. Sync new/changed clusters
 	for _, cluster := range drain.Clusters {
-		inMemIDs[cluster.ClusterId] = true
-		dbCluster, exists := dbClusters[cluster.ClusterId]
+		inMemIDs[cluster.ClusterID] = true
+		dbCluster, exists := dbClusters[cluster.ClusterID]
 		templateStr := strings.Join(cluster.LogTemplateTokens, " ")
 		if !exists {
-			_, err := insertStmt.ExecContext(ctx, cluster.ClusterId, templateStr, cluster.Size)
+			_, err := insertStmt.ExecContext(ctx, cluster.ClusterID, templateStr, cluster.Size)
 			if err != nil {
 				return err
 			}
 		} else if dbCluster.template != templateStr || dbCluster.size != cluster.Size {
 			// Changed cluster
-			_, err := updateStmt.ExecContext(ctx, cluster.ClusterId, templateStr, cluster.Size)
+			_, err := updateStmt.ExecContext(ctx, cluster.ClusterID, templateStr, cluster.Size)
 			if err != nil {
 				return err
 			}
@@ -162,9 +218,9 @@ func (p *PGXClusterPersistence) Save(ctx context.Context, state []byte) error {
 	}
 
 	// 3. Delete missing clusters
-	for clusterId := range dbClusters {
-		if !inMemIDs[clusterId] {
-			_, err := tx.ExecContext(ctx, fmt.Sprintf(`DELETE FROM %s WHERE cluster_id = $1`, p.tableName), clusterId)
+	for clusterID := range dbClusters {
+		if !inMemIDs[clusterID] {
+			_, err := tx.ExecContext(ctx, fmt.Sprintf(`DELETE FROM %s WHERE cluster_id = $1`, p.tableName), clusterID)
 			if err != nil {
 				return err
 			}
@@ -183,14 +239,14 @@ func (p *PGXClusterPersistence) Load(ctx context.Context) ([]byte, error) {
 
 	var clusters []*LogCluster
 	for rows.Next() {
-		var clusterId int64
+		var clusterID int64
 		var template string
 		var size int64
-		if err := rows.Scan(&clusterId, &template, &size); err != nil {
+		if err := rows.Scan(&clusterID, &template, &size); err != nil {
 			return nil, err
 		}
 		cluster := &LogCluster{
-			ClusterId:         clusterId,
+			ClusterID:         clusterID,
 			LogTemplateTokens: strings.Split(template, " "),
 			Size:              size,
 		}
@@ -201,4 +257,38 @@ func (p *PGXClusterPersistence) Load(ctx context.Context) ([]byte, error) {
 		Clusters: clusters,
 	}
 	return json.Marshal(drain)
+}
+
+func (p *PGXClusterPersistence) Info() (PersistenceInformation, error) {
+	var count sql.NullInt64
+	var lastUpdated sql.NullTime
+	var maxClusters sql.NullInt64
+
+	err := p.db.QueryRow(fmt.Sprintf(`SELECT count(updated) AS records, max(updated) AS last_updated, max(size) AS max_clusters FROM %s`, p.tableName)).Scan(&count, &lastUpdated, &maxClusters)
+	if err != nil {
+		return PersistenceInformation{}, fmt.Errorf("failed to get record count: %w", err)
+	}
+
+	lastUpdatedStr := ""
+	if lastUpdated.Valid {
+		lastUpdatedStr = lastUpdated.Time.Format(time.RFC3339)
+	}
+
+	maxClustersVal := 0
+	if maxClusters.Valid {
+		maxClustersVal = int(maxClusters.Int64)
+	}
+
+	countVal := 0
+	if count.Valid {
+		countVal = int(count.Int64)
+	}
+
+	return PersistenceInformation{
+		StorageType: "pgx",
+		StorageName: strings.TrimSuffix(p.tableName, "_clusters"),
+		MaxClusters: maxClustersVal,
+		RecordCount: countVal,
+		LastUpdated: lastUpdatedStr,
+	}, nil
 }

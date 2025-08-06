@@ -32,7 +32,18 @@ CREATE TABLE IF NOT EXISTS %s (
 		return nil, fmt.Errorf("failed to create clusters table: %w", err)
 	}
 
-	return &PGXClusterPersistence{db: db, tableName: tbl}, nil
+	return &PGXClusterPersistence{db: db, tableName: tbl, lockID: -1}, nil
+}
+
+// GetLockID returns the lock ID for the persistence layer, based on the table name
+func (p *PGXClusterPersistence) GetLockID() int64 {
+	if p.lockID == -1 {
+		h := fnv.New64a()
+		h.Write([]byte(p.tableName))
+		p.lockID = int64(h.Sum64())
+	}
+
+	return p.lockID
 }
 
 // Flush clears the target table from the existing data (truncate)
@@ -202,4 +213,26 @@ func (p *PGXClusterPersistence) Info() (PersistenceInformation, error) {
 		RecordCount: countVal,
 		LastUpdated: lastUpdatedStr,
 	}, nil
+}
+
+// Lock the persistence to prevent concurrent writes
+func (p *PGXClusterPersistence) Lock() error {
+	_, err := p.db.Exec(fmt.Sprintf(`SELECT pg_advisory_lock(%d)`, p.GetLockID()))
+	return err
+}
+
+// Unlock the persistence
+func (p *PGXClusterPersistence) Unlock() error {
+	_, err := p.db.Exec(fmt.Sprintf(`SELECT pg_advisory_unlock(%d)`, p.GetLockID()))
+	return err
+}
+
+// IsLocked checks if the persistence is locked.
+func (p *PGXClusterPersistence) IsLocked() bool {
+	var isLocked bool
+	err := p.db.QueryRow(fmt.Sprintf(`SELECT pg_try_advisory_lock(%d)`, p.GetLockID())).Scan(&isLocked)
+	if err != nil {
+		return false
+	}
+	return !isLocked
 }

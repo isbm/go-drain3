@@ -38,3 +38,18 @@ func (p *MemoryPersistence) Info() (PersistenceInformation, error) {
 		LastUpdated: "",
 	}, nil
 }
+
+func (p *MemoryPersistence) Lock() error {
+	// Memory persistence does not support locking
+	return nil
+}
+
+func (p *MemoryPersistence) Unlock() error {
+	// Memory persistence does not support unlocking
+	return nil
+}
+
+func (p *MemoryPersistence) IsLocked() bool {
+	// Memory persistence does not support locking
+	return false
+}

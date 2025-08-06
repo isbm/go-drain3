@@ -18,6 +18,10 @@ type TemplateMiner struct {
 	batchCount   int
 }
 
+func (m *TemplateMiner) GetPersistence() PersistenceHandler {
+	return m.persistence
+}
+
 func (m *TemplateMiner) GetDrain() *Drain {
 	return m.drain
 }

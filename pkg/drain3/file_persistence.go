@@ -8,12 +8,13 @@ import (
 )
 
 type FilePersistence struct {
+	lockPath  string
 	filePath  string
 	timeStamp time.Time
 }
 
 func NewFilePersistence(filePath string) *FilePersistence {
-	return &FilePersistence{filePath: filePath}
+	return &FilePersistence{filePath: filePath, lockPath: filePath + ".lock", timeStamp: time.Now()}
 }
 
 func (p *FilePersistence) Save(_ context.Context, state []byte) error {
@@ -67,4 +68,23 @@ func (p *FilePersistence) Info() (PersistenceInformation, error) {
 	}
 
 	return info, nil
+}
+
+// Lock the storage
+func (p *FilePersistence) Lock() error {
+	if _, err := os.Stat(p.lockPath); err == nil {
+		return fmt.Errorf("storage is already locked: %s", p.lockPath)
+	}
+	return os.WriteFile(p.lockPath, []byte{}, 0600)
+}
+
+// Unlock the storage
+func (p *FilePersistence) Unlock() error {
+	return os.Remove(p.lockPath)
+}
+
+// IsLocked checks if the storage is locked
+func (p *FilePersistence) IsLocked() bool {
+	_, err := os.Stat(p.lockPath)
+	return err == nil
 }
